@@ -45,4 +45,11 @@ class AppUpdaterTest {
             gh.apkUrl
         )
     }
+
+    @Test
+    fun `isNewerVersion compares semantic version tags accurately`() {
+        org.junit.Assert.assertTrue(AppUpdaterParser.isNewerVersion("1.0.2", "1.0.0"))
+        org.junit.Assert.assertFalse(AppUpdaterParser.isNewerVersion("1.0.2", "1.0.2"))
+        org.junit.Assert.assertFalse(AppUpdaterParser.isNewerVersion("1.0.1", "1.0.2"))
+    }
 }

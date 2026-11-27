@@ -59,7 +59,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.moonreader.app.BuildConfig
 import com.moonreader.app.data.local.AppPreferences
+import com.moonreader.app.data.local.AppUpdaterParser
 import com.moonreader.app.data.local.PreferencesStore
 import com.moonreader.app.domain.model.AppThemeMode
 import com.moonreader.app.domain.model.Category
@@ -352,15 +354,27 @@ fun MoreScreen(
                         }
                         appUpdateState.releaseInfo != null -> {
                             val rel = appUpdateState.releaseInfo
+                            val isNewer = AppUpdaterParser.isNewerVersion(
+                                remoteVersionName = rel.versionName,
+                                currentVersionName = BuildConfig.VERSION_NAME
+                            )
                             Card(
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                    containerColor = if (isNewer) {
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    }
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
-                                        text = "Rilis terbaru: v${rel.versionName}",
+                                        text = if (isNewer) {
+                                            "Tersedia versi baru: v${rel.versionName} (terpasang v${BuildConfig.VERSION_NAME})"
+                                        } else {
+                                            "Aplikasi sudah versi terbaru (v${BuildConfig.VERSION_NAME})"
+                                        },
                                         fontWeight = FontWeight.SemiBold,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
@@ -378,7 +392,12 @@ fun MoreScreen(
                 }
             },
             confirmButton = {
-                if (appUpdateState.releaseInfo != null) {
+                val rel = appUpdateState.releaseInfo
+                val isNewer = rel != null && AppUpdaterParser.isNewerVersion(
+                    remoteVersionName = rel.versionName,
+                    currentVersionName = BuildConfig.VERSION_NAME
+                )
+                if (rel != null && isNewer) {
                     Button(onClick = onInstallAppUpdate) {
                         Text("Unduh APK di Browser")
                     }
@@ -577,7 +596,7 @@ fun MoreScreen(
                 MoreItem(
                     icon = Icons.Outlined.Info,
                     title = "Tentang MoonReader",
-                    subtitle = "v1.0.0 • Arsitektur Tachiyomi-style",
+                    subtitle = "v${BuildConfig.VERSION_NAME} • Arsitektur Tachiyomi-style",
                     onClick = { showAboutDialog = true }
                 )
             }

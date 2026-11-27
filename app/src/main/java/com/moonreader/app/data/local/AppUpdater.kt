@@ -69,6 +69,10 @@ object AppUpdaterParser {
         )
     }
 
+    fun isNewerVersion(remoteVersionName: String, currentVersionName: String): Boolean {
+        return parseVersionCode(remoteVersionName) > parseVersionCode(currentVersionName)
+    }
+
     internal fun parseVersionCode(versionName: String): Int {
         val parts = versionName.split(".").mapNotNull { it.filter(Char::isDigit).toIntOrNull() }
         if (parts.isEmpty()) return 1
@@ -93,6 +97,7 @@ class AppUpdater(
                 .url(apiUrl)
                 .header("User-Agent", "MoonReader/${BuildConfig.VERSION_NAME}")
                 .header("Accept", "application/vnd.github+json")
+                .header("Cache-Control", "no-cache")
                 .get()
                 .build()
             okHttpClient.newCall(req).execute().use { resp ->
