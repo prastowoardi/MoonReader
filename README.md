@@ -130,7 +130,44 @@ Sambungkan HP Android (aktifkan *USB Debugging*) atau jalankan emulator, lalu ja
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
-Atau salin file `app-debug.apk` langsung ke HP Android dan buka untuk menginstal.
+Atau salin file `app-debug.apk` / `app-release.apk` langsung ke HP Android dan buka untuk menginstal.
+
+---
+
+## Rilis Versi Baru & Tagging (GitHub Actions)
+
+Workflow [`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml) akan otomatis menjalankan unit test, mem-build APK, dan menerbitkannya ke **GitHub Releases** setiap kali *tag* berawalan `v` (contoh: `v1.0.2`) di-push ke GitHub.
+
+### 1. Siapkan Secrets Signing (Sekali Saja, Opsional)
+Agar APK hasil build GitHub Actions ditandatangani dengan *release keystore* yang sama seperti build lokal, buka **GitHub Repo → Settings → Secrets and variables → Actions** lalu tambahkan:
+* `SIGNING_KEYSTORE_BASE64`: hasil dari `base64 -i keystore/moonreader-release.jks | pbcopy`
+* `SIGNING_STORE_PASSWORD`: password keystore
+* `SIGNING_KEY_ALIAS`: alias key (misal `moonreader`)
+* `SIGNING_KEY_PASSWORD`: password key
+
+*(Jika secrets belum diisi, workflow tetap berjalan dan mem-build fallback `app-debug.apk`.)*
+
+### 2. Langkah Membuat Tag & Release Baru
+1. Naikkan `versionCode` dan `versionName` di [`app/build.gradle.kts`](app/build.gradle.kts) (misalnya `versionCode = 2` dan `versionName = "1.0.2"`).
+2. Commit & push perubahan ke branch `main`:
+   ```bash
+   git add .
+   git commit -m "Release v1.0.2"
+   git push origin main
+   ```
+3. Buat *tag* baru lalu push ke `origin`:
+   ```bash
+   git tag v1.0.2
+   git push origin v1.0.2
+   ```
+4. Pantau progresnya di tab **Actions** GitHub hingga selesai, lalu buka MoonReader di HP → **Lainnya → Pembaruan Aplikasi (GitHub) → Cek Pembaruan** untuk mengunduh rilis terbaru lewat browser.
+
+> **Catatan:** Jangan push ke branch bernama `release` untuk memicu build, karena trigger workflow hanya membaca *tag* `v*` (atau dijalankan manual dari tab Actions via `workflow_dispatch`). Jika perlu mengulang tag yang sudah terlanjur di-push:
+> ```bash
+> git tag -d v1.0.2
+> git push origin :refs/tags/v1.0.2
+> git tag v1.0.2 && git push origin v1.0.2
+> ```
 
 ---
 
