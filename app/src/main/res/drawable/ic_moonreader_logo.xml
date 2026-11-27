@@ -1,0 +1,82 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Rounded cosmic badge backdrop -->
+    <path android:pathData="M48,6a42,42 0,1 1,0 84a42,42 0,1 1,0 -84">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="84"
+                android:endY="88"
+                android:startX="12"
+                android:startY="8"
+                android:type="linear">
+                <item
+                    android:color="#111936"
+                    android:offset="0.0" />
+                <item
+                    android:color="#1D3576"
+                    android:offset="0.6" />
+                <item
+                    android:color="#2563EB"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M48,6a42,42 0,1 1,0 84a42,42 0,1 1,0 -84"
+        android:strokeWidth="1.5"
+        android:strokeColor="#4493C5FD" />
+
+    <!-- Moon Glow -->
+    <path
+        android:fillColor="#3360A5FA"
+        android:pathData="M46,38m-16,0a16,16 0,1 1,32 0a16,16 0,1 1,-32 0" />
+
+    <!-- Crescent Moon -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45.5,21.5C37.2,21.5 30.5,28.2 30.5,36.5C30.5,44.8 37.2,51.5 45.5,51.5C51.1,51.5 56.0,48.4 58.6,43.8C56.5,44.9 54.1,45.5 51.5,45.5C43.8,45.5 37.5,39.2 37.5,31.5C37.5,27.6 39.1,24.1 41.7,21.6C42.9,21.5 44.2,21.5 45.5,21.5Z" />
+
+    <!-- Star Sparkle -->
+    <path
+        android:fillColor="#FCD34D"
+        android:pathData="M56.5,25.5L58.0,29.2L61.7,30.7L58.0,32.2L56.5,35.9L55.0,32.2L51.3,30.7L55.0,29.2Z" />
+
+    <!-- Open Manga Book Base -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M22,51.5C29.5,48.8 39.2,49.4 48,54.2C56.8,49.4 66.5,48.8 74,51.5L74,69.8C66.2,67.2 56.5,67.8 48,72.5C39.5,67.8 29.8,67.2 22,69.8Z" />
+
+    <!-- Left Page -->
+    <path
+        android:fillColor="#E2EEFF"
+        android:pathData="M24.5,49.2C31.5,46.8 40.2,47.6 47.5,52.2L47.5,68.8C40.0,64.8 31.5,64.2 24.5,66.4Z" />
+
+    <!-- Right Page -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M71.5,49.2C64.5,46.8 55.8,47.6 48.5,52.2L48.5,68.8C56.0,64.8 64.5,64.2 71.5,66.4Z" />
+
+    <!-- Spine -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M47.2,52.0L48.8,52.0L48.8,70.8L47.2,70.8Z" />
+
+    <!-- Page lines -->
+    <path
+        android:fillColor="#93C5FD"
+        android:pathData="M28.5,54.0L43.2,55.6L43.2,57.2L28.5,55.6Z" />
+    <path
+        android:fillColor="#93C5FD"
+        android:pathData="M28.5,58.8L40.5,60.0L40.5,61.6L28.5,60.4Z" />
+    <path
+        android:fillColor="#93C5FD"
+        android:pathData="M52.8,55.6L67.5,54.0L67.5,55.6L52.8,57.2Z" />
+    <path
+        android:fillColor="#93C5FD"
+        android:pathData="M55.5,60.0L67.5,58.8L67.5,60.4L55.5,61.6Z" />
+</vector>

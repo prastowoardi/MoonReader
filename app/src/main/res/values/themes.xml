@@ -1,3 +1,9 @@
 <resources>
     <style name="Theme.MoonReader" parent="android:Theme.Material.NoActionBar" />
+
+    <style name="Theme.MoonReader.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0B1021</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_moonreader_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.MoonReader</item>
+    </style>
 </resources>
