@@ -88,6 +88,8 @@ fun MoonNavGraph(viewModel: MainViewModel) {
     val trackerAccounts by viewModel.trackerAccounts.collectAsState()
     val trackSearchState by viewModel.trackSearchState.collectAsState()
     val isTrackerLoggingIn by viewModel.isTrackerLoggingIn.collectAsState()
+    val syncingTrackIds by viewModel.syncingTrackIds.collectAsState()
+    val trackFeedback by viewModel.trackFeedback.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -351,9 +353,12 @@ fun MoonNavGraph(viewModel: MainViewModel) {
                         tracks = tracks,
                         accounts = trackerAccounts,
                         searchState = trackSearchState,
+                        syncingTrackIds = syncingTrackIds,
+                        trackFeedback = trackFeedback,
                         onDismiss = {
                             showTrackingSheet = false
                             viewModel.closeTrackerSearch()
+                            viewModel.clearTrackFeedback()
                         },
                         onOpenSearch = { trackerId ->
                             viewModel.openTrackerSearch(trackerId, currentManga.title)

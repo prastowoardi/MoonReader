@@ -65,6 +65,11 @@ class TrackerParsingTest {
         assertEquals(120f, updated.lastChapterRead, 0.01f)
         assertEquals(9.5f, updated.score, 0.01f)
         assertEquals("PLANNING", AniListParser.toAniListStatus(TrackStatus.PLAN_TO_READ))
+        assertEquals(
+            "Invalid token",
+            AniListParser.parseGraphQlError("""{"errors":[{"message":"Invalid token"}]}""")
+        )
+        assertEquals(null, AniListParser.parseGraphQlError(entryJson))
     }
 
     @Test

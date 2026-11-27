@@ -63,6 +63,7 @@ import com.moonreader.app.domain.model.TrackSearchResult
 import com.moonreader.app.domain.model.TrackStatus
 import com.moonreader.app.domain.model.TrackerAccountInfo
 import com.moonreader.app.ui.state.TrackSearchUiState
+import com.moonreader.app.ui.state.TrackSyncFeedback
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -71,6 +72,8 @@ fun TrackingBottomSheet(
     tracks: List<TrackRecord>,
     accounts: List<TrackerAccountInfo>,
     searchState: TrackSearchUiState?,
+    syncingTrackIds: Set<String> = emptySet(),
+    trackFeedback: Map<String, TrackSyncFeedback> = emptyMap(),
     onDismiss: () -> Unit,
     onOpenSearch: (trackerId: String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -258,6 +261,8 @@ fun TrackingBottomSheet(
                             LinkedTrackCard(
                                 account = account,
                                 track = linked,
+                                isSyncing = linked.id in syncingTrackIds,
+                                feedback = trackFeedback[linked.id],
                                 onSync = onUpdateTrack,
                                 onRemove = { onRemoveTrack(linked.id) }
                             )
@@ -274,12 +279,14 @@ fun TrackingBottomSheet(
 private fun LinkedTrackCard(
     account: TrackerAccountInfo,
     track: TrackRecord,
+    isSyncing: Boolean = false,
+    feedback: TrackSyncFeedback? = null,
     onSync: (TrackRecord) -> Unit,
     onRemove: () -> Unit
 ) {
-    var selectedStatus by remember(track) { mutableStateOf(track.status) }
-    var chapterRead by remember(track) { mutableFloatStateOf(track.lastChapterRead) }
-    var score by remember(track) { mutableFloatStateOf(track.score) }
+    var selectedStatus by remember(track.id, track.updatedAt) { mutableStateOf(track.status) }
+    var chapterRead by remember(track.id, track.updatedAt) { mutableFloatStateOf(track.lastChapterRead) }
+    var score by remember(track.id, track.updatedAt) { mutableFloatStateOf(track.score) }
 
     Column(
         modifier = Modifier
@@ -380,7 +387,7 @@ private fun LinkedTrackCard(
         }
 
         Button(
-            enabled = account.isLoggedIn,
+            enabled = account.isLoggedIn && !isSyncing,
             onClick = {
                 onSync(
                     track.copy(
@@ -393,11 +400,40 @@ private fun LinkedTrackCard(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
+            if (isSyncing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Menyinkronkan ke ${account.name}...")
+            } else {
+                Icon(Icons.Outlined.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    if (account.isLoggedIn) "Sinkronkan ke ${account.name}"
+                    else "Login di menu Lainnya untuk sinkron"
+                )
+            }
+        }
+
+        if (feedback != null) {
             Text(
-                if (account.isLoggedIn) "Sinkronkan ke ${account.name}"
-                else "Login di menu Lainnya untuk sinkron"
+                text = feedback.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (feedback.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (feedback.isError) {
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                        }
+                    )
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             )
         }
     }

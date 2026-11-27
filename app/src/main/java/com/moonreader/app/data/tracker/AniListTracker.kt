@@ -97,6 +97,16 @@ object AniListParser {
         )
     }
 
+    fun parseGraphQlError(rawJson: String): String? {
+        if (rawJson.isBlank()) return null
+        val obj = runCatching { json.parseToJsonElement(rawJson).jsonObject }.getOrNull() ?: return null
+        val errors = obj["errors"] as? JsonArray ?: return null
+        val messages = errors.mapNotNull { elem ->
+            (elem as? JsonObject)?.get("message")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        }
+        return messages.joinToString("; ").takeIf { it.isNotBlank() }
+    }
+
     fun toAniListStatus(status: TrackStatus): String = when (status) {
         TrackStatus.READING -> "CURRENT"
         TrackStatus.COMPLETED -> "COMPLETED"
@@ -255,8 +265,8 @@ class AniListTracker(
                 require(!token.isNullOrBlank()) { "Login ke AniList terlebih dahulu untuk sinkronisasi" }
 
                 val gql = """
-                    mutation (${'$'}mediaId: Int, ${'$'}status: MediaListStatus, ${'$'}progress: Int, ${'$'}score: Float) {
-                      SaveMediaListEntry(mediaId: ${'$'}mediaId, status: ${'$'}status, progress: ${'$'}progress, score: ${'$'}score) {
+                    mutation (${'$'}mediaId: Int, ${'$'}status: MediaListStatus, ${'$'}progress: Int, ${'$'}scoreRaw: Int) {
+                      SaveMediaListEntry(mediaId: ${'$'}mediaId, status: ${'$'}status, progress: ${'$'}progress, scoreRaw: ${'$'}scoreRaw) {
                         id
                         status
                         progress
@@ -270,7 +280,7 @@ class AniListTracker(
                     put("status", AniListParser.toAniListStatus(track.status))
                     put("progress", track.lastChapterRead.toInt().coerceAtLeast(0))
                     if (track.score > 0f) {
-                        put("score", track.score.toDouble())
+                        put("scoreRaw", (track.score * 10f).toInt().coerceIn(1, 100))
                     }
                 }
                 val body = buildJsonObject {
@@ -290,6 +300,7 @@ class AniListTracker(
     private fun executeGraphQl(bodyJson: String, accessToken: String?): String {
         val builder = Request.Builder()
             .url(GRAPHQL_URL)
+            .header("User-Agent", "MoonReader/1.0")
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .post(bodyJson.toRequestBody(JSON_MEDIA))
@@ -298,8 +309,12 @@ class AniListTracker(
         }
         client.newCall(builder.build()).execute().use { resp ->
             val text = resp.body?.string().orEmpty()
+            val gqlError = AniListParser.parseGraphQlError(text)
             if (!resp.isSuccessful) {
-                throw IOException("AniList HTTP ${resp.code}: ${text.take(120)}")
+                throw IOException("AniList HTTP ${resp.code}: ${gqlError ?: text.take(120)}")
+            }
+            if (gqlError != null) {
+                throw IOException("AniList: $gqlError")
             }
             return text
         }

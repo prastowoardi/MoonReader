@@ -93,6 +93,11 @@ data class TrackSearchUiState(
     val error: String? = null
 )
 
+data class TrackSyncFeedback(
+    val message: String,
+    val isError: Boolean = false
+)
+
 data class MigrateUiState(
     val sourceManga: Manga? = null,
     val oldChaptersCount: Int = 0,
@@ -157,6 +162,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _isTrackerLoggingIn = MutableStateFlow(false)
     val isTrackerLoggingIn: StateFlow<Boolean> = _isTrackerLoggingIn.asStateFlow()
+
+    private val _syncingTrackIds = MutableStateFlow<Set<String>>(emptySet())
+    val syncingTrackIds: StateFlow<Set<String>> = _syncingTrackIds.asStateFlow()
+
+    private val _trackFeedback = MutableStateFlow<Map<String, TrackSyncFeedback>>(emptyMap())
+    val trackFeedback: StateFlow<Map<String, TrackSyncFeedback>> = _trackFeedback.asStateFlow()
 
     private var migrateSearchJob: kotlinx.coroutines.Job? = null
 
@@ -818,7 +829,11 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+        runCatching {
+            context.startActivity(intent)
+        }.onFailure { err ->
+            viewModelScope.launch { _snackbarEvents.emit("Gagal membuka browser: ${err.message}") }
+        }
     }
 
     fun handleOAuthRedirect(uri: Uri) {
@@ -907,11 +922,16 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     fun bindTrackerCandidate(mangaId: String, candidate: TrackSearchResult) {
         viewModelScope.launch {
             repo.bindTrack(mangaId, candidate)
-                .onSuccess {
+                .onSuccess { bound ->
                     _trackSearchState.value = null
-                    _snackbarEvents.emit("Ditautkan ke ${candidate.title}")
+                    val msg = "Ditautkan ke ${candidate.title}"
+                    _trackFeedback.update { it + (bound.id to TrackSyncFeedback(msg, isError = false)) }
+                    _snackbarEvents.emit(msg)
                 }
                 .onFailure { err ->
+                    _trackSearchState.update { st ->
+                        st?.copy(error = err.message ?: "Gagal menautkan judul")
+                    }
                     _snackbarEvents.emit("Gagal menautkan: ${err.message}")
                 }
         }
@@ -919,17 +939,34 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun updateTrackRecord(track: TrackRecord) {
         viewModelScope.launch {
+            _syncingTrackIds.update { it + track.id }
+            _trackFeedback.update { it - track.id }
             repo.updateTrack(track)
-                .onSuccess { _snackbarEvents.emit("Progres tracker tersinkron") }
-                .onFailure { err -> _snackbarEvents.emit("Gagal sinkron: ${err.message}") }
+                .onSuccess { synced ->
+                    val trackerName = container.trackerManager.getTracker(synced.trackerId)?.name ?: synced.trackerId
+                    val msg = "Tersinkron ke $trackerName: Ch. ${synced.lastChapterRead.toInt()} • ${synced.status.label}"
+                    _trackFeedback.update { it + (track.id to TrackSyncFeedback(msg, isError = false)) }
+                    _snackbarEvents.emit(msg)
+                }
+                .onFailure { err ->
+                    val msg = "Gagal sinkron: ${err.message ?: "Kesalahan jaringan"}"
+                    _trackFeedback.update { it + (track.id to TrackSyncFeedback(msg, isError = true)) }
+                    _snackbarEvents.emit(msg)
+                }
+            _syncingTrackIds.update { it - track.id }
         }
     }
 
     fun removeTrackRecord(trackId: String) {
         viewModelScope.launch {
             repo.removeTrack(trackId)
+            _trackFeedback.update { it - trackId }
             _snackbarEvents.emit("Tautan tracker dihapus")
         }
+    }
+
+    fun clearTrackFeedback() {
+        _trackFeedback.value = emptyMap()
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
