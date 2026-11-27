@@ -3,6 +3,9 @@ package com.moonreader.app.data.local
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import com.moonreader.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,6 +16,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 
 data class AppReleaseInfo(
@@ -113,9 +118,74 @@ class AppUpdater(
         }
     }
 
-    fun openDownloadInBrowser(url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    suspend fun downloadApk(
+        apkUrl: String,
+        onProgress: (Int) -> Unit
+    ): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
+            val outFile = File(updatesDir, "moonreader-update.apk")
+
+            val req = Request.Builder()
+                .url(apkUrl)
+                .header("User-Agent", "MoonReader/${BuildConfig.VERSION_NAME}")
+                .get()
+                .build()
+            okHttpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) throw IOException("Gagal mengunduh APK (HTTP ${resp.code})")
+                val body = resp.body ?: throw IOException("File APK kosong")
+                val total = body.contentLength()
+                var downloaded = 0L
+
+                body.byteStream().use { input ->
+                    FileOutputStream(outFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            downloaded += read
+                            if (total > 0L) {
+                                onProgress(((downloaded * 100) / total).toInt().coerceIn(0, 100))
+                            }
+                        }
+                    }
+                }
+                onProgress(100)
+            }
+            outFile
+        }
+    }
+
+    fun canRequestPackageInstalls(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.packageManager.canRequestPackageInstalls()
+        } else {
+            true
+        }
+    }
+
+    fun launchInstallPermissionSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}")
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+    }
+
+    fun launchApkInstaller(apkFile: File) {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            apkFile
+        )
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
     }

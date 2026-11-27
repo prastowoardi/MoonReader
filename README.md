@@ -35,7 +35,7 @@ Semua sumber konten mengimplementasikan kontrak [`MangaSource`](app/src/main/jav
 * **Antrean Unduhan (`ChapterDownloader`):** Simpan halaman *chapter* ke penyimpanan aplikasi untuk dibaca *offline*.
 * **Backup & Restore (`BackupManager` & `TachibkParser`):** Ekspor dan impor perpustakaan dalam format JSON MoonReader, serta mendukung **restore langsung file backup Tachiyomi / Mihon (`.tachibk`)** lengkap dengan kategori, daftar komik, sampul, dan progres chapter terbaca.
 * **Tema Material 3:** Mendukung `Sistem`, `Terang`, `Gelap`, dan `AMOLED Hitam`.
-* **In-App OTA Update (`AppUpdater`):** Cek rilis APK terbaru langsung dari dalam aplikasi via **GitHub Releases** (`https://github.com/prastowoardi/MoonReader`) lalu unduh via browser.
+* **In-App OTA Update (`AppUpdater`):** Cek, unduh dengan *progress bar*, dan langsung pasang APK terbaru dari **GitHub Releases** (`https://github.com/prastowoardi/MoonReader`) dari dalam aplikasi.
 
 ---
 

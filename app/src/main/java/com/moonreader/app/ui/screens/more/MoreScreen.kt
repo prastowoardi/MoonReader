@@ -315,8 +315,10 @@ fun MoreScreen(
     if (showUpdaterDialog) {
         AlertDialog(
             onDismissRequest = {
-                showUpdaterDialog = false
-                onDismissAppUpdate()
+                if (!appUpdateState.isDownloading) {
+                    showUpdaterDialog = false
+                    onDismissAppUpdate()
+                }
             },
             title = { Text("Pembaruan Aplikasi (GitHub)") },
             text = {
@@ -330,7 +332,7 @@ fun MoreScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        text = "Cek rilis APK terbaru langsung dari GitHub Releases dan unduh via browser.",
+                        text = "Unduh APK terbaru dari GitHub Releases langsung di aplikasi lalu buka installer Android.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -343,6 +345,16 @@ fun MoreScreen(
                             ) {
                                 CircularProgressIndicator(modifier = Modifier.padding(4.dp))
                                 Text("Memeriksa rilis GitHub...")
+                            }
+                        }
+                        appUpdateState.isDownloading -> {
+                            Column {
+                                Text("Mengunduh APK (${appUpdateState.downloadProgress}%)...")
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { appUpdateState.downloadProgress / 100f },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                         appUpdateState.error != null -> {
@@ -397,13 +409,13 @@ fun MoreScreen(
                     remoteVersionName = rel.versionName,
                     currentVersionName = BuildConfig.VERSION_NAME
                 )
-                if (rel != null && isNewer) {
+                if (rel != null && isNewer && !appUpdateState.isDownloading) {
                     Button(onClick = onInstallAppUpdate) {
-                        Text("Unduh APK di Browser")
+                        Text("Unduh & Pasang")
                     }
                 } else {
                     Button(
-                        enabled = !appUpdateState.isChecking && updateUrlInput.isNotBlank(),
+                        enabled = !appUpdateState.isChecking && !appUpdateState.isDownloading && updateUrlInput.isNotBlank(),
                         onClick = { onCheckAppUpdate(updateUrlInput) }
                     ) {
                         Text("Cek Pembaruan")
@@ -412,6 +424,7 @@ fun MoreScreen(
             },
             dismissButton = {
                 TextButton(
+                    enabled = !appUpdateState.isDownloading,
                     onClick = {
                         showUpdaterDialog = false
                         onDismissAppUpdate()
