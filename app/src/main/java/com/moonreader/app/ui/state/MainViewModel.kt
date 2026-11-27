@@ -71,8 +71,6 @@ data class MigrateTargetPreview(
 
 data class AppUpdateUiState(
     val isChecking: Boolean = false,
-    val isDownloading: Boolean = false,
-    val downloadProgress: Int = 0,
     val releaseInfo: AppReleaseInfo? = null,
     val error: String? = null
 )
@@ -527,27 +525,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun downloadAndInstallAppUpdate() {
         val info = _appUpdateState.value.releaseInfo ?: return
-        val updater = container.appUpdater
-        if (!updater.canRequestPackageInstalls()) {
-            updater.launchInstallPermissionSettings()
-            viewModelScope.launch {
-                _snackbarEvents.emit("Aktifkan izin \"Install unknown apps\" untuk MoonReader, lalu coba lagi")
-            }
-            return
-        }
-        viewModelScope.launch {
-            _appUpdateState.update { it.copy(isDownloading = true, downloadProgress = 0, error = null) }
-            updater.downloadApk(info.apkUrl) { pct ->
-                _appUpdateState.update { it.copy(downloadProgress = pct) }
-            }.onSuccess { apkFile ->
-                _appUpdateState.update { it.copy(isDownloading = false) }
-                updater.launchApkInstaller(apkFile)
-            }.onFailure { err ->
-                _appUpdateState.update {
-                    it.copy(isDownloading = false, error = err.message ?: "Gagal mengunduh APK")
-                }
-            }
-        }
+        container.appUpdater.openDownloadInBrowser(info.apkUrl)
     }
 
     fun clearAppUpdateState() {

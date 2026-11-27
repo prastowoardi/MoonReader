@@ -35,6 +35,7 @@ Semua sumber konten mengimplementasikan kontrak [`MangaSource`](app/src/main/jav
 * **Antrean Unduhan (`ChapterDownloader`):** Simpan halaman *chapter* ke penyimpanan aplikasi untuk dibaca *offline*.
 * **Backup & Restore (`BackupManager` & `TachibkParser`):** Ekspor dan impor perpustakaan dalam format JSON MoonReader, serta mendukung **restore langsung file backup Tachiyomi / Mihon (`.tachibk`)** lengkap dengan kategori, daftar komik, sampul, dan progres chapter terbaca.
 * **Tema Material 3:** Mendukung `Sistem`, `Terang`, `Gelap`, dan `AMOLED Hitam`.
+* **In-App OTA Update (`AppUpdater`):** Cek rilis APK terbaru langsung dari dalam aplikasi via **GitHub Releases** (`https://github.com/prastowoardi/MoonReader`) lalu unduh via browser.
 
 ---
 
@@ -117,12 +118,12 @@ Hasil APK akan dibuat di:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### 4. Build Release APK (Opsional)
-Untuk menghasilkan APK versi rilis (`app-release-unsigned.apk` jika belum dikonfigurasi *keystore*):
+### 4. Build Signed Release APK
+Proyek sudah dikonfigurasi dengan R8 (`isMinifyEnabled = true` + `isShrinkResources = true`) dan membaca `keystore.properties` (jangan di-commit ke Git):
 ```bash
-./gradlew assembleRelease
+JAVA_HOME=/Library/Java/JavaVirtualMachines/liberica-jdk-17.jdk/Contents/Home ./gradlew assembleRelease
 ```
-Output berada di `app/build/outputs/apk/release/`.
+Output berada di `app/build/outputs/apk/release/app-release.apk`.
 
 ### 5. Install ke Perangkat / Emulator via ADB
 Sambungkan HP Android (aktifkan *USB Debugging*) atau jalankan emulator, lalu jalankan:

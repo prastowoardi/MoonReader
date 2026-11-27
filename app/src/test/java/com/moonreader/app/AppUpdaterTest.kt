@@ -7,47 +7,42 @@ import org.junit.Test
 class AppUpdaterTest {
 
     @Test
-    fun `normalizeUpdateUrl converts GitHub repo URL to latest release API`() {
+    fun `normalizeGitHubReleaseApiUrl converts GitHub repo URL to latest release API`() {
         assertEquals(
-            "https://api.github.com/repos/user123/MoonReader/releases/latest",
-            AppUpdaterParser.normalizeUpdateUrl("https://github.com/user123/MoonReader/")
+            "https://api.github.com/repos/prastowoardi/MoonReader/releases/latest",
+            AppUpdaterParser.normalizeGitHubReleaseApiUrl("https://github.com/prastowoardi/MoonReader")
         )
         assertEquals(
-            "http://192.168.1.21:8787/version.json",
-            AppUpdaterParser.normalizeUpdateUrl("http://192.168.1.21:8787/version.json")
+            "https://api.github.com/repos/prastowoardi/MoonReader/releases/latest",
+            AppUpdaterParser.normalizeGitHubReleaseApiUrl("https://github.com/prastowoardi/MoonReader.git")
         )
     }
 
     @Test
-    fun `parseReleaseInfo supports local OTA version json and GitHub Releases json`() {
-        val localJson = """
-            {
-              "versionCode": 2,
-              "versionName": "1.0.1",
-              "apkUrl": "http://192.168.1.21:8787/app-debug.apk",
-              "changelog": "Build terbaru dari Mac"
-            }
-        """.trimIndent()
-        val local = AppUpdaterParser.parseReleaseInfo(localJson)
-        assertEquals(2, local.versionCode)
-        assertEquals("1.0.1", local.versionName)
-        assertEquals("http://192.168.1.21:8787/app-debug.apk", local.apkUrl)
-
+    fun `parseGitHubRelease prefers release APK asset over debug APK`() {
         val ghJson = """
             {
               "tag_name": "v1.2.3",
-              "body": "Fitur baru",
+              "html_url": "https://github.com/prastowoardi/MoonReader/releases/tag/v1.2.3",
+              "body": "Rilis terbaru",
               "assets": [
                 {
-                  "name": "MoonReader-v1.2.3.apk",
-                  "browser_download_url": "https://github.com/u/r/releases/download/v1.2.3/MoonReader.apk"
+                  "name": "app-debug.apk",
+                  "browser_download_url": "https://github.com/prastowoardi/MoonReader/releases/download/v1.2.3/app-debug.apk"
+                },
+                {
+                  "name": "MoonReader-v1.2.3-release.apk",
+                  "browser_download_url": "https://github.com/prastowoardi/MoonReader/releases/download/v1.2.3/MoonReader-v1.2.3-release.apk"
                 }
               ]
             }
         """.trimIndent()
-        val gh = AppUpdaterParser.parseReleaseInfo(ghJson)
+        val gh = AppUpdaterParser.parseGitHubRelease(ghJson)
         assertEquals(10203, gh.versionCode)
         assertEquals("1.2.3", gh.versionName)
-        assertEquals("https://github.com/u/r/releases/download/v1.2.3/MoonReader.apk", gh.apkUrl)
+        assertEquals(
+            "https://github.com/prastowoardi/MoonReader/releases/download/v1.2.3/MoonReader-v1.2.3-release.apk",
+            gh.apkUrl
+        )
     }
 }

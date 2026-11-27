@@ -108,7 +108,7 @@ fun MoreScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showUpdaterDialog by remember { mutableStateOf(false) }
     var updateUrlInput by remember(preferences.updateFeedUrl) {
-        mutableStateOf(preferences.updateFeedUrl.ifBlank { "http://192.168.1.21:8787/version.json" })
+        mutableStateOf(preferences.updateFeedUrl.ifBlank { PreferencesStore.DEFAULT_UPDATE_FEED_URL })
     }
     var newCategoryName by remember { mutableStateOf("") }
 
@@ -313,24 +313,22 @@ fun MoreScreen(
     if (showUpdaterDialog) {
         AlertDialog(
             onDismissRequest = {
-                if (!appUpdateState.isDownloading) {
-                    showUpdaterDialog = false
-                    onDismissAppUpdate()
-                }
+                showUpdaterDialog = false
+                onDismissAppUpdate()
             },
-            title = { Text("Pembaruan Aplikasi (OTA)") },
+            title = { Text("Pembaruan Aplikasi (GitHub)") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = updateUrlInput,
                         onValueChange = { updateUrlInput = it },
-                        label = { Text("URL version.json / Repo GitHub") },
-                        placeholder = { Text("http://192.168.1.21:8787/version.json") },
+                        label = { Text("URL Repo GitHub Releases") },
+                        placeholder = { Text(PreferencesStore.DEFAULT_UPDATE_FEED_URL) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        text = "Bisa pakai URL WiFi Mac lokal (scripts/serve-ota.sh) atau URL repo GitHub Releases.",
+                        text = "Cek rilis APK terbaru langsung dari GitHub Releases dan unduh via browser.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -342,17 +340,7 @@ fun MoreScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 CircularProgressIndicator(modifier = Modifier.padding(4.dp))
-                                Text("Memeriksa pembaruan...")
-                            }
-                        }
-                        appUpdateState.isDownloading -> {
-                            Column {
-                                Text("Mengunduh APK (${appUpdateState.downloadProgress}%)...")
-                                Spacer(modifier = Modifier.height(6.dp))
-                                LinearProgressIndicator(
-                                    progress = { appUpdateState.downloadProgress / 100f },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Text("Memeriksa rilis GitHub...")
                             }
                         }
                         appUpdateState.error != null -> {
@@ -372,7 +360,7 @@ fun MoreScreen(
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
-                                        text = "Tersedia v${rel.versionName} (code ${rel.versionCode})",
+                                        text = "Rilis terbaru: v${rel.versionName}",
                                         fontWeight = FontWeight.SemiBold,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
@@ -390,13 +378,13 @@ fun MoreScreen(
                 }
             },
             confirmButton = {
-                if (appUpdateState.releaseInfo != null && !appUpdateState.isDownloading) {
+                if (appUpdateState.releaseInfo != null) {
                     Button(onClick = onInstallAppUpdate) {
-                        Text("Unduh & Pasang")
+                        Text("Unduh APK di Browser")
                     }
                 } else {
                     Button(
-                        enabled = !appUpdateState.isChecking && !appUpdateState.isDownloading && updateUrlInput.isNotBlank(),
+                        enabled = !appUpdateState.isChecking && updateUrlInput.isNotBlank(),
                         onClick = { onCheckAppUpdate(updateUrlInput) }
                     ) {
                         Text("Cek Pembaruan")
@@ -405,7 +393,6 @@ fun MoreScreen(
             },
             dismissButton = {
                 TextButton(
-                    enabled = !appUpdateState.isDownloading,
                     onClick = {
                         showUpdaterDialog = false
                         onDismissAppUpdate()
@@ -583,8 +570,8 @@ fun MoreScreen(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 MoreItem(
                     icon = Icons.Outlined.SystemUpdate,
-                    title = "Pembaruan Aplikasi (Tanpa Kabel)",
-                    subtitle = preferences.updateFeedUrl.ifBlank { "Cek & pasang APK terbaru via WiFi / GitHub" },
+                    title = "Pembaruan Aplikasi (GitHub)",
+                    subtitle = preferences.updateFeedUrl.ifBlank { PreferencesStore.DEFAULT_UPDATE_FEED_URL },
                     onClick = { showUpdaterDialog = true }
                 )
                 MoreItem(

@@ -15,3 +15,7 @@ captures/
 *.dex
 *.class
 *.log
+keystore/
+keystore.properties
+*.jks
+*.keystore

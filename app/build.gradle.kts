@@ -1,9 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
+}
+
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -23,13 +32,37 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val storePath = System.getenv("MOONREADER_KEYSTORE_PATH")
+                ?: keystoreProps.getProperty("storeFile")
+            if (!storePath.isNullOrBlank()) {
+                val resolvedFile = rootProject.file(storePath)
+                if (resolvedFile.exists()) {
+                    storeFile = resolvedFile
+                    storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                        ?: keystoreProps.getProperty("storePassword")
+                    keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                        ?: keystoreProps.getProperty("keyAlias")
+                    keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+                        ?: keystoreProps.getProperty("keyPassword")
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val releaseConfig = signingConfigs.getByName("release")
+            if (releaseConfig.storeFile != null) {
+                signingConfig = releaseConfig
+            }
         }
     }
 
