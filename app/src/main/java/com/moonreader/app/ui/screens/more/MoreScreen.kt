@@ -320,7 +320,7 @@ fun MoreScreen(
                     onDismissAppUpdate()
                 }
             },
-            title = { Text("Pembaruan Aplikasi (GitHub)") },
+            title = { Text("Pembaruan Aplikasi") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
@@ -602,7 +602,7 @@ fun MoreScreen(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 MoreItem(
                     icon = Icons.Outlined.SystemUpdate,
-                    title = "Pembaruan Aplikasi (GitHub)",
+                    title = "Pembaruan Aplikasi",
                     subtitle = preferences.updateFeedUrl.ifBlank { PreferencesStore.DEFAULT_UPDATE_FEED_URL },
                     onClick = { showUpdaterDialog = true }
                 )
