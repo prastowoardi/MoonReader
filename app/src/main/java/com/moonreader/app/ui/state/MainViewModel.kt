@@ -1,5 +1,7 @@
 package com.moonreader.app.ui.state
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -8,6 +10,8 @@ import com.moonreader.app.AppContainer
 import com.moonreader.app.data.local.AppPreferences
 import com.moonreader.app.data.local.AppReleaseInfo
 import com.moonreader.app.data.local.OpdsServerConfig
+import com.moonreader.app.data.tracker.AniListTracker
+import com.moonreader.app.data.tracker.MyAnimeListTracker
 import com.moonreader.app.domain.model.AppThemeMode
 import com.moonreader.app.domain.model.CatalogMode
 import com.moonreader.app.domain.model.Category
@@ -19,6 +23,9 @@ import com.moonreader.app.domain.model.Manga
 import com.moonreader.app.domain.model.Page
 import com.moonreader.app.domain.model.ReaderMode
 import com.moonreader.app.domain.model.SourceInfo
+import com.moonreader.app.domain.model.TrackRecord
+import com.moonreader.app.domain.model.TrackSearchResult
+import com.moonreader.app.domain.model.TrackerAccountInfo
 import com.moonreader.app.domain.model.UpdateEntry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -77,6 +84,15 @@ data class AppUpdateUiState(
     val error: String? = null
 )
 
+data class TrackSearchUiState(
+    val trackerId: String = "",
+    val trackerName: String = "",
+    val query: String = "",
+    val isLoading: Boolean = false,
+    val results: List<TrackSearchResult> = emptyList(),
+    val error: String? = null
+)
+
 data class MigrateUiState(
     val sourceManga: Manga? = null,
     val oldChaptersCount: Int = 0,
@@ -132,6 +148,15 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _appUpdateState = MutableStateFlow(AppUpdateUiState())
     val appUpdateState: StateFlow<AppUpdateUiState> = _appUpdateState.asStateFlow()
+
+    private val _trackerAccounts = MutableStateFlow(container.trackerManager.getAccountInfos())
+    val trackerAccounts: StateFlow<List<TrackerAccountInfo>> = _trackerAccounts.asStateFlow()
+
+    private val _trackSearchState = MutableStateFlow<TrackSearchUiState?>(null)
+    val trackSearchState: StateFlow<TrackSearchUiState?> = _trackSearchState.asStateFlow()
+
+    private val _isTrackerLoggingIn = MutableStateFlow(false)
+    val isTrackerLoggingIn: StateFlow<Boolean> = _isTrackerLoggingIn.asStateFlow()
 
     private var migrateSearchJob: kotlinx.coroutines.Job? = null
 
@@ -710,6 +735,200 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             }.onFailure { err ->
                 _snackbarEvents.emit("Migrasi gagal: ${err.message}")
             }
+        }
+    }
+
+    fun observeTracks(mangaId: String): Flow<List<TrackRecord>> = repo.observeTracksForManga(mangaId)
+
+    fun refreshTrackerAccounts() {
+        _trackerAccounts.value = container.trackerManager.getAccountInfos()
+    }
+
+    fun loginKitsu(usernameOrEmail: String, password: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isTrackerLoggingIn.value = true
+            container.trackerManager.kitsu.login(usernameOrEmail, password)
+                .onSuccess { name ->
+                    refreshTrackerAccounts()
+                    _snackbarEvents.emit("Kitsu terhubung sebagai $name")
+                    onSuccess()
+                }
+                .onFailure { err ->
+                    _snackbarEvents.emit("Login Kitsu gagal: ${err.message}")
+                }
+            _isTrackerLoggingIn.value = false
+        }
+    }
+
+    fun loginAniListWithToken(token: String, clientId: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isTrackerLoggingIn.value = true
+            container.trackerManager.aniList.loginWithToken(token, clientId)
+                .onSuccess { name ->
+                    refreshTrackerAccounts()
+                    _snackbarEvents.emit("AniList terhubung sebagai $name")
+                    onSuccess()
+                }
+                .onFailure { err ->
+                    _snackbarEvents.emit("Login AniList gagal: ${err.message}")
+                }
+            _isTrackerLoggingIn.value = false
+        }
+    }
+
+    fun loginMalWithToken(token: String, clientId: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isTrackerLoggingIn.value = true
+            container.trackerManager.myAnimeList.loginWithToken(token, clientId)
+                .onSuccess { name ->
+                    refreshTrackerAccounts()
+                    _snackbarEvents.emit("MyAnimeList terhubung sebagai $name")
+                    onSuccess()
+                }
+                .onFailure { err ->
+                    _snackbarEvents.emit("Login MAL gagal: ${err.message}")
+                }
+            _isTrackerLoggingIn.value = false
+        }
+    }
+
+    fun launchTrackerOAuth(context: Context, trackerId: String, clientId: String) {
+        val cleanId = clientId.trim()
+        if (cleanId.isBlank()) {
+            viewModelScope.launch { _snackbarEvents.emit("Masukkan Client ID terlebih dahulu") }
+            return
+        }
+        val authUrl = when (trackerId) {
+            AniListTracker.TRACKER_ID -> {
+                val existing = prefs.state.value.trackerCredentials[AniListTracker.TRACKER_ID]
+                prefs.saveTrackerCredentials(
+                    (existing ?: com.moonreader.app.data.local.TrackerCredentials(AniListTracker.TRACKER_ID))
+                        .copy(clientId = cleanId)
+                )
+                refreshTrackerAccounts()
+                container.trackerManager.aniList.buildAuthorizeUrl(cleanId)
+            }
+            MyAnimeListTracker.TRACKER_ID -> {
+                val url = container.trackerManager.myAnimeList.prepareAuthorizeUrl(cleanId)
+                refreshTrackerAccounts()
+                url
+            }
+            else -> return
+        }
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
+    fun handleOAuthRedirect(uri: Uri) {
+        when (uri.host) {
+            "anilist-auth" -> {
+                val fragment = uri.fragment.orEmpty()
+                val params = fragment.split("&").mapNotNull { part ->
+                    val idx = part.indexOf('=')
+                    if (idx > 0) part.substring(0, idx) to Uri.decode(part.substring(idx + 1)) else null
+                }.toMap()
+                val token = params["access_token"] ?: uri.getQueryParameter("access_token")
+                if (!token.isNullOrBlank()) {
+                    loginAniListWithToken(token, "") {}
+                } else {
+                    viewModelScope.launch { _snackbarEvents.emit("Token AniList tidak ditemukan di callback") }
+                }
+            }
+            "mal-auth" -> {
+                val code = uri.getQueryParameter("code")
+                if (!code.isNullOrBlank()) {
+                    viewModelScope.launch {
+                        _isTrackerLoggingIn.value = true
+                        container.trackerManager.myAnimeList.exchangeAuthCode(code)
+                            .onSuccess { name ->
+                                refreshTrackerAccounts()
+                                _snackbarEvents.emit("MyAnimeList terhubung sebagai $name")
+                            }
+                            .onFailure { err ->
+                                _snackbarEvents.emit("OAuth MAL gagal: ${err.message}")
+                            }
+                        _isTrackerLoggingIn.value = false
+                    }
+                } else {
+                    val errDesc = uri.getQueryParameter("error") ?: "Authorization dibatalkan"
+                    viewModelScope.launch { _snackbarEvents.emit("Login MAL gagal: $errDesc") }
+                }
+            }
+        }
+    }
+
+    fun logoutTracker(trackerId: String) {
+        container.trackerManager.getTracker(trackerId)?.logout()
+        refreshTrackerAccounts()
+        viewModelScope.launch {
+            _snackbarEvents.emit("Akun tracker diputuskan")
+        }
+    }
+
+    fun openTrackerSearch(trackerId: String, initialQuery: String) {
+        val tracker = container.trackerManager.getTracker(trackerId) ?: return
+        _trackSearchState.value = TrackSearchUiState(
+            trackerId = trackerId,
+            trackerName = tracker.name,
+            query = initialQuery,
+            isLoading = true
+        )
+        runTrackerSearch()
+    }
+
+    fun updateTrackerSearchQuery(query: String) {
+        _trackSearchState.update { it?.copy(query = query) }
+    }
+
+    fun runTrackerSearch() {
+        val st = _trackSearchState.value ?: return
+        val q = st.query.trim()
+        if (q.isBlank()) return
+        viewModelScope.launch {
+            _trackSearchState.update { it?.copy(isLoading = true, error = null) }
+            repo.searchTracker(st.trackerId, q)
+                .onSuccess { list ->
+                    _trackSearchState.update { it?.copy(isLoading = false, results = list, error = null) }
+                }
+                .onFailure { err ->
+                    _trackSearchState.update {
+                        it?.copy(isLoading = false, results = emptyList(), error = err.message ?: "Gagal mencari")
+                    }
+                }
+        }
+    }
+
+    fun closeTrackerSearch() {
+        _trackSearchState.value = null
+    }
+
+    fun bindTrackerCandidate(mangaId: String, candidate: TrackSearchResult) {
+        viewModelScope.launch {
+            repo.bindTrack(mangaId, candidate)
+                .onSuccess {
+                    _trackSearchState.value = null
+                    _snackbarEvents.emit("Ditautkan ke ${candidate.title}")
+                }
+                .onFailure { err ->
+                    _snackbarEvents.emit("Gagal menautkan: ${err.message}")
+                }
+        }
+    }
+
+    fun updateTrackRecord(track: TrackRecord) {
+        viewModelScope.launch {
+            repo.updateTrack(track)
+                .onSuccess { _snackbarEvents.emit("Progres tracker tersinkron") }
+                .onFailure { err -> _snackbarEvents.emit("Gagal sinkron: ${err.message}") }
+        }
+    }
+
+    fun removeTrackRecord(trackId: String) {
+        viewModelScope.launch {
+            repo.removeTrack(trackId)
+            _snackbarEvents.emit("Tautan tracker dihapus")
         }
     }
 

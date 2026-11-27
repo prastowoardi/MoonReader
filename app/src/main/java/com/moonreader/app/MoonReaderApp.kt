@@ -13,6 +13,10 @@ import com.moonreader.app.data.source.DemoPageFetcher
 import com.moonreader.app.data.source.LocalCbzSource
 import com.moonreader.app.data.source.MangaDexSource
 import com.moonreader.app.data.source.SourceManager
+import com.moonreader.app.data.tracker.AniListTracker
+import com.moonreader.app.data.tracker.KitsuTracker
+import com.moonreader.app.data.tracker.MyAnimeListTracker
+import com.moonreader.app.data.tracker.TrackerManager
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import java.net.URI
@@ -68,11 +72,18 @@ class AppContainer(app: Application) {
         chapterDao = database.chapterDao()
     )
 
+    val trackerManager = TrackerManager(
+        aniList = AniListTracker(okHttpClient, preferencesStore),
+        myAnimeList = MyAnimeListTracker(okHttpClient, preferencesStore),
+        kitsu = KitsuTracker(okHttpClient, preferencesStore)
+    )
+
     val repository = MangaRepository(
         context = app,
         database = database,
         sourceManager = sourceManager,
-        downloader = chapterDownloader
+        downloader = chapterDownloader,
+        trackerManager = trackerManager
     )
 
     val appUpdater = AppUpdater(

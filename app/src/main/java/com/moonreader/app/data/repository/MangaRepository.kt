@@ -10,9 +10,11 @@ import com.moonreader.app.data.local.HistoryEntity
 import com.moonreader.app.data.local.MangaEntity
 import com.moonreader.app.data.local.MoonDatabase
 import com.moonreader.app.data.local.TachibkParser
+import com.moonreader.app.data.local.TrackRecordEntity
 import com.moonreader.app.data.source.ChapterDownloader
 import com.moonreader.app.data.source.DemoCatalogSource
 import com.moonreader.app.data.source.SourceManager
+import com.moonreader.app.data.tracker.TrackerManager
 import com.moonreader.app.domain.model.Category
 import com.moonreader.app.domain.model.Chapter
 import com.moonreader.app.domain.model.DownloadTask
@@ -20,6 +22,8 @@ import com.moonreader.app.domain.model.HistoryEntry
 import com.moonreader.app.domain.model.Manga
 import com.moonreader.app.domain.model.Page
 import com.moonreader.app.domain.model.SourceInfo
+import com.moonreader.app.domain.model.TrackRecord
+import com.moonreader.app.domain.model.TrackSearchResult
 import com.moonreader.app.domain.model.UpdateEntry
 import com.moonreader.app.domain.source.MangaPageResult
 import com.moonreader.app.domain.source.MangaSource
@@ -33,12 +37,14 @@ class MangaRepository(
     private val context: Context,
     private val database: MoonDatabase,
     private val sourceManager: SourceManager,
-    private val downloader: ChapterDownloader
+    private val downloader: ChapterDownloader,
+    private val trackerManager: TrackerManager
 ) {
     private val mangaDao = database.mangaDao()
     private val chapterDao = database.chapterDao()
     private val categoryDao = database.categoryDao()
     private val historyDao = database.historyDao()
+    private val trackDao = database.trackDao()
 
     val libraryFlow: Flow<List<Manga>> = mangaDao.observeLibrary().map { rows ->
         rows.map { it.toDomain() }
@@ -225,7 +231,8 @@ class MangaRepository(
         totalPages: Int
     ) = withContext(Dispatchers.IO) {
         val existing = chapterDao.getChapterById(chapterId)
-        val isRead = (existing?.read == true) || (totalPages > 0 && pageIndex >= totalPages - 1)
+        val becameRead = (existing?.read != true) && (totalPages > 0 && pageIndex >= totalPages - 1)
+        val isRead = (existing?.read == true) || becameRead
         chapterDao.updateProgress(chapterId, read = isRead, lastPageRead = pageIndex)
         historyDao.upsertHistory(
             HistoryEntity(
@@ -235,6 +242,9 @@ class MangaRepository(
                 readAt = System.currentTimeMillis()
             )
         )
+        if (becameRead) {
+            syncTrackedChapterProgress(mangaId)
+        }
     }
 
     suspend fun markChapterRead(chapterId: String, read: Boolean) = withContext(Dispatchers.IO) {
@@ -244,12 +254,18 @@ class MangaRepository(
             read = read,
             lastPageRead = if (read) current.lastPageRead else 0
         )
+        if (read) {
+            syncTrackedChapterProgress(current.mangaId)
+        }
     }
 
     suspend fun markAllChaptersRead(mangaId: String, read: Boolean) = withContext(Dispatchers.IO) {
         val ids = chapterDao.getChapters(mangaId).map { it.id }
         if (ids.isNotEmpty()) {
             chapterDao.markAllRead(ids, read)
+            if (read) {
+                syncTrackedChapterProgress(mangaId)
+            }
         }
     }
 
@@ -460,6 +476,62 @@ class MangaRepository(
                 }
             }
             finalTargetManga.id
+        }
+    }
+
+    fun observeTracksForManga(mangaId: String): Flow<List<TrackRecord>> =
+        trackDao.observeTracksForManga(mangaId).map { list -> list.map { it.toDomain() } }
+
+    suspend fun searchTracker(trackerId: String, query: String): Result<List<TrackSearchResult>> {
+        val service = trackerManager.getTracker(trackerId)
+            ?: return Result.failure(IllegalArgumentException("Tracker $trackerId tidak ditemukan"))
+        return service.search(query)
+    }
+
+    suspend fun bindTrack(mangaId: String, candidate: TrackSearchResult): Result<TrackRecord> =
+        withContext(Dispatchers.IO) {
+            val service = trackerManager.getTracker(candidate.trackerId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Tracker tidak ditemukan"))
+            service.bind(mangaId, candidate).map { bound ->
+                val highestRead = chapterDao.getChapters(mangaId)
+                    .filter { it.read }
+                    .maxOfOrNull { it.chapterNumber } ?: 0f
+                val adjusted = if (highestRead > bound.lastChapterRead) {
+                    bound.copy(lastChapterRead = highestRead)
+                } else bound
+                trackDao.upsertTrack(TrackRecordEntity.fromDomain(adjusted))
+                adjusted
+            }
+        }
+
+    suspend fun updateTrack(track: TrackRecord): Result<TrackRecord> = withContext(Dispatchers.IO) {
+        val service = trackerManager.getTracker(track.trackerId)
+            ?: return@withContext Result.failure(IllegalArgumentException("Tracker tidak ditemukan"))
+        service.update(track).map { synced ->
+            trackDao.upsertTrack(TrackRecordEntity.fromDomain(synced))
+            synced
+        }
+    }
+
+    suspend fun removeTrack(trackId: String) = withContext(Dispatchers.IO) {
+        trackDao.deleteTrackById(trackId)
+    }
+
+    private suspend fun syncTrackedChapterProgress(mangaId: String) {
+        val tracks = trackDao.getTracksForManga(mangaId).map { it.toDomain() }
+        if (tracks.isEmpty()) return
+        val maxRead = chapterDao.getChapters(mangaId)
+            .filter { it.read }
+            .maxOfOrNull { it.chapterNumber } ?: return
+
+        for (track in tracks) {
+            if (maxRead <= track.lastChapterRead) continue
+            val service = trackerManager.getTracker(track.trackerId) ?: continue
+            if (!service.getAccountInfo().isLoggedIn) continue
+            val updated = track.copy(lastChapterRead = maxRead, updatedAt = System.currentTimeMillis())
+            service.update(updated).onSuccess { synced ->
+                trackDao.upsertTrack(TrackRecordEntity.fromDomain(synced))
+            }
         }
     }
 }

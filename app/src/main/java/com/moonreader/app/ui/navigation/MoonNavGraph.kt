@@ -22,16 +22,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.moonreader.app.ui.components.TrackingBottomSheet
 import com.moonreader.app.ui.screens.browse.BrowseScreen
 import com.moonreader.app.ui.screens.browse.CatalogBrowserScreen
 import com.moonreader.app.ui.screens.detail.MangaDetailScreen
@@ -81,6 +85,10 @@ fun MoonNavGraph(viewModel: MainViewModel) {
     val readerState by viewModel.readerState.collectAsState()
     val migrateState by viewModel.migrateState.collectAsState()
     val appUpdateState by viewModel.appUpdateState.collectAsState()
+    val trackerAccounts by viewModel.trackerAccounts.collectAsState()
+    val trackSearchState by viewModel.trackSearchState.collectAsState()
+    val isTrackerLoggingIn by viewModel.isTrackerLoggingIn.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.snackbarEvents.collect { msg ->
@@ -237,6 +245,8 @@ fun MoonNavGraph(viewModel: MainViewModel) {
                     downloadTasks = downloadTasks,
                     isRestoringBackup = isRestoringBackup,
                     appUpdateState = appUpdateState,
+                    trackerAccounts = trackerAccounts,
+                    isTrackerLoggingIn = isTrackerLoggingIn,
                     onSetThemeMode = viewModel::setThemeMode,
                     onSetDefaultReaderMode = viewModel::setDefaultReaderMode,
                     onSetGridColumns = viewModel::setGridColumns,
@@ -253,6 +263,18 @@ fun MoonNavGraph(viewModel: MainViewModel) {
                     onCheckAppUpdate = viewModel::checkAppUpdate,
                     onInstallAppUpdate = viewModel::downloadAndInstallAppUpdate,
                     onDismissAppUpdate = viewModel::clearAppUpdateState,
+                    onLoginKitsu = viewModel::loginKitsu,
+                    onLaunchTrackerOAuth = { trackerId, clientId ->
+                        viewModel.launchTrackerOAuth(context, trackerId, clientId)
+                    },
+                    onLoginTrackerWithToken = { trackerId, token, clientId, onDone ->
+                        if (trackerId == "anilist") {
+                            viewModel.loginAniListWithToken(token, clientId, onDone)
+                        } else {
+                            viewModel.loginMalWithToken(token, clientId, onDone)
+                        }
+                    },
+                    onLogoutTracker = viewModel::logoutTracker,
                     onNotify = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }
                 )
             }
@@ -298,12 +320,15 @@ fun MoonNavGraph(viewModel: MainViewModel) {
                 val mangaId = Uri.decode(backStackEntry.arguments?.getString("mangaId").orEmpty())
                 val manga by viewModel.observeManga(mangaId).collectAsState(initial = null)
                 val chapters by viewModel.observeChapters(mangaId).collectAsState(initial = emptyList())
+                val tracks by viewModel.observeTracks(mangaId).collectAsState(initial = emptyList())
+                var showTrackingSheet by remember(mangaId) { mutableStateOf(false) }
 
                 MangaDetailScreen(
                     manga = manga,
                     chapters = chapters,
                     categories = categories,
                     downloadTasks = downloadTasks,
+                    trackedCount = tracks.size,
                     isRefreshing = isRefreshingDetail,
                     onBack = { navController.popBackStack() },
                     onRefresh = { viewModel.refreshMangaDetail(mangaId) },
@@ -315,8 +340,34 @@ fun MoonNavGraph(viewModel: MainViewModel) {
                     onMarkAllRead = { read -> viewModel.markAllChaptersRead(mangaId, read) },
                     onDownloadChapter = viewModel::enqueueDownload,
                     onDeleteDownload = { chapterId -> viewModel.deleteDownload(mangaId, chapterId) },
-                    onMigrateClick = { navigateToMigrateSearch(mangaId) }
+                    onMigrateClick = { navigateToMigrateSearch(mangaId) },
+                    onTrackingClick = { showTrackingSheet = true }
                 )
+
+                val currentManga = manga
+                if (showTrackingSheet && currentManga != null) {
+                    TrackingBottomSheet(
+                        mangaTitle = currentManga.title,
+                        tracks = tracks,
+                        accounts = trackerAccounts,
+                        searchState = trackSearchState,
+                        onDismiss = {
+                            showTrackingSheet = false
+                            viewModel.closeTrackerSearch()
+                        },
+                        onOpenSearch = { trackerId ->
+                            viewModel.openTrackerSearch(trackerId, currentManga.title)
+                        },
+                        onSearchQueryChange = viewModel::updateTrackerSearchQuery,
+                        onSearchSubmit = viewModel::runTrackerSearch,
+                        onCloseSearch = viewModel::closeTrackerSearch,
+                        onSelectCandidate = { candidate ->
+                            viewModel.bindTrackerCandidate(mangaId, candidate)
+                        },
+                        onUpdateTrack = viewModel::updateTrackRecord,
+                        onRemoveTrack = viewModel::removeTrackRecord
+                    )
+                }
             }
 
             composable(

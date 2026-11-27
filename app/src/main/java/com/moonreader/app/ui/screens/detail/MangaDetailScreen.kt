@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -100,7 +101,9 @@ fun MangaDetailScreen(
     onMarkAllRead: (Boolean) -> Unit,
     onDownloadChapter: (Manga, Chapter) -> Unit,
     onDeleteDownload: (String) -> Unit,
-    onMigrateClick: () -> Unit = {}
+    onMigrateClick: () -> Unit = {},
+    trackedCount: Int = 0,
+    onTrackingClick: () -> Unit = {}
 ) {
     var sortDescending by remember { mutableStateOf(true) }
     var unreadOnly by remember { mutableStateOf(false) }
@@ -337,6 +340,12 @@ fun MangaDetailScreen(
                         label = "Migrasi",
                         active = false,
                         onClick = onMigrateClick
+                    )
+                    DetailActionButton(
+                        icon = Icons.Outlined.Sync,
+                        label = if (trackedCount > 0) "Track ($trackedCount)" else "Track",
+                        active = trackedCount > 0,
+                        onClick = onTrackingClick
                     )
                     Box {
                         DetailActionButton(

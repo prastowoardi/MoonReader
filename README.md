@@ -31,7 +31,10 @@ Semua sumber konten mengimplementasikan kontrak [`MangaSource`](app/src/main/jav
 * **Kontrol Interaktif:** *Double-tap* & *pinch-to-zoom* (pada mode halaman), zona ketuk tepi & tengah, *slider* halaman, navigasi *chapter* sebelum/berikutnya, pengatur kecerahan layar, dan opsi layar tetap menyala (*keep screen on*).
 * **Pelacakan Otomatis:** Halaman terakhir tersimpan otomatis ke Room Database setiap kali berpindah halaman.
 
-### 5. Unduhan Offline, Backup & Tema
+### 5. Unduhan Offline, Tracking, Backup & Tema
+* **Tracker Layanan (MyAnimeList, AniList, Kitsu):** Hubungkan akun tracker di tab **Lainnya → Tracker**, cari & kaitkan judul dari halaman Detail Komik (`Track`), ubah status baca, skor (0–10), serta sinkronisasi progres chapter secara otomatis ketika chapter ditandai sudah dibaca.
+  * **Kitsu:** Login langsung dengan email/username dan password.
+  * **AniList & MyAnimeList:** Login via OAuth2 Browser (`moonreader://anilist-auth` / `moonreader://mal-auth` dengan *Client ID* Anda) atau tempel Access Token secara langsung.
 * **Antrean Unduhan (`ChapterDownloader`):** Simpan halaman *chapter* ke penyimpanan aplikasi untuk dibaca *offline*.
 * **Backup & Restore (`BackupManager` & `TachibkParser`):** Ekspor dan impor perpustakaan dalam format JSON MoonReader, serta mendukung **restore langsung file backup Tachiyomi / Mihon (`.tachibk`)** lengkap dengan kategori, daftar komik, sampul, dan progres chapter terbaca.
 * **Tema Material 3:** Mendukung `Sistem`, `Terang`, `Gelap`, dan `AMOLED Hitam`.

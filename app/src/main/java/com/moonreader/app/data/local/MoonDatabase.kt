@@ -10,11 +10,15 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.moonreader.app.domain.model.Category
 import com.moonreader.app.domain.model.Chapter
 import com.moonreader.app.domain.model.HistoryEntry
 import com.moonreader.app.domain.model.Manga
 import com.moonreader.app.domain.model.MangaStatus
+import com.moonreader.app.domain.model.TrackRecord
+import com.moonreader.app.domain.model.TrackStatus
 import com.moonreader.app.domain.model.UpdateEntry
 import kotlinx.coroutines.flow.Flow
 
@@ -138,6 +142,57 @@ data class HistoryEntity(
     val lastPageRead: Int,
     val readAt: Long
 )
+
+@Entity(tableName = "track_records")
+data class TrackRecordEntity(
+    @PrimaryKey val id: String,
+    val mangaId: String,
+    val trackerId: String,
+    val remoteId: Long,
+    val libraryEntryId: String,
+    val title: String,
+    val coverUrl: String,
+    val status: String,
+    val lastChapterRead: Float,
+    val totalChapters: Int,
+    val score: Float,
+    val remoteUrl: String,
+    val updatedAt: Long
+) {
+    fun toDomain(): TrackRecord = TrackRecord(
+        id = id,
+        mangaId = mangaId,
+        trackerId = trackerId,
+        remoteId = remoteId,
+        libraryEntryId = libraryEntryId,
+        title = title,
+        coverUrl = coverUrl,
+        status = runCatching { TrackStatus.valueOf(status) }.getOrDefault(TrackStatus.READING),
+        lastChapterRead = lastChapterRead,
+        totalChapters = totalChapters,
+        score = score,
+        remoteUrl = remoteUrl,
+        updatedAt = updatedAt
+    )
+
+    companion object {
+        fun fromDomain(t: TrackRecord): TrackRecordEntity = TrackRecordEntity(
+            id = t.id,
+            mangaId = t.mangaId,
+            trackerId = t.trackerId,
+            remoteId = t.remoteId,
+            libraryEntryId = t.libraryEntryId,
+            title = t.title,
+            coverUrl = t.coverUrl,
+            status = t.status.name,
+            lastChapterRead = t.lastChapterRead,
+            totalChapters = t.totalChapters,
+            score = t.score,
+            remoteUrl = t.remoteUrl,
+            updatedAt = t.updatedAt
+        )
+    }
+}
 
 data class MangaWithStatsRow(
     val id: String,
@@ -360,14 +415,33 @@ interface HistoryDao {
     suspend fun clearAll()
 }
 
+@Dao
+interface TrackDao {
+    @Query("SELECT * FROM track_records WHERE mangaId = :mangaId ORDER BY trackerId ASC")
+    fun observeTracksForManga(mangaId: String): Flow<List<TrackRecordEntity>>
+
+    @Query("SELECT * FROM track_records WHERE mangaId = :mangaId ORDER BY trackerId ASC")
+    suspend fun getTracksForManga(mangaId: String): List<TrackRecordEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTrack(track: TrackRecordEntity)
+
+    @Query("DELETE FROM track_records WHERE id = :id")
+    suspend fun deleteTrackById(id: String)
+
+    @Query("DELETE FROM track_records WHERE mangaId = :mangaId")
+    suspend fun deleteTracksForManga(mangaId: String)
+}
+
 @Database(
     entities = [
         MangaEntity::class,
         ChapterEntity::class,
         CategoryEntity::class,
-        HistoryEntity::class
+        HistoryEntity::class,
+        TrackRecordEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MoonDatabase : RoomDatabase() {
@@ -375,11 +449,37 @@ abstract class MoonDatabase : RoomDatabase() {
     abstract fun chapterDao(): ChapterDao
     abstract fun categoryDao(): CategoryDao
     abstract fun historyDao(): HistoryDao
+    abstract fun trackDao(): TrackDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `track_records` (
+                        `id` TEXT NOT NULL,
+                        `mangaId` TEXT NOT NULL,
+                        `trackerId` TEXT NOT NULL,
+                        `remoteId` INTEGER NOT NULL,
+                        `libraryEntryId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `coverUrl` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `lastChapterRead` REAL NOT NULL,
+                        `totalChapters` INTEGER NOT NULL,
+                        `score` REAL NOT NULL,
+                        `remoteUrl` TEXT NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun build(context: Context): MoonDatabase =
             Room.databaseBuilder(context.applicationContext, MoonDatabase::class.java, "moonreader.db")
-                .fallbackToDestructiveMigration()
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

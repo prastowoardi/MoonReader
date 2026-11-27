@@ -21,6 +21,16 @@ data class OpdsServerConfig(
     val password: String = ""
 )
 
+@Serializable
+data class TrackerCredentials(
+    val trackerId: String,
+    val accessToken: String = "",
+    val refreshToken: String = "",
+    val username: String = "",
+    val userId: String = "",
+    val clientId: String = ""
+)
+
 data class AppPreferences(
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val defaultReaderMode: ReaderMode = ReaderMode.WEBTOON,
@@ -32,7 +42,8 @@ data class AppPreferences(
     val disabledSourceIds: Set<String> = emptySet(),
     val preferIndonesianLanguage: Boolean = true,
     val opdsServers: List<OpdsServerConfig> = emptyList(),
-    val updateFeedUrl: String = PreferencesStore.DEFAULT_UPDATE_FEED_URL
+    val updateFeedUrl: String = PreferencesStore.DEFAULT_UPDATE_FEED_URL,
+    val trackerCredentials: Map<String, TrackerCredentials> = emptyMap()
 )
 
 class PreferencesStore(context: Context) {
@@ -70,6 +81,14 @@ class PreferencesStore(context: Context) {
             emptyList()
         }
 
+        val trackerRaw = prefs.getString("tracker_creds_json", null)
+        val trackerMap = if (!trackerRaw.isNullOrBlank()) {
+            runCatching { json.decodeFromString<Map<String, TrackerCredentials>>(trackerRaw) }
+                .getOrDefault(emptyMap())
+        } else {
+            emptyMap()
+        }
+
         return AppPreferences(
             themeMode = theme,
             defaultReaderMode = reader,
@@ -82,7 +101,8 @@ class PreferencesStore(context: Context) {
             preferIndonesianLanguage = prefs.getBoolean("prefer_id_lang", true),
             opdsServers = opdsList,
             updateFeedUrl = prefs.getString("update_feed_url", null)?.takeIf { it.isNotBlank() }
-                ?: DEFAULT_UPDATE_FEED_URL
+                ?: DEFAULT_UPDATE_FEED_URL,
+            trackerCredentials = trackerMap
         )
     }
 
@@ -157,5 +177,33 @@ class PreferencesStore(context: Context) {
         val trimmed = url.trim()
         prefs.edit().putString("update_feed_url", trimmed).apply()
         _state.update { it.copy(updateFeedUrl = trimmed) }
+    }
+
+    fun saveTrackerCredentials(creds: TrackerCredentials) {
+        val updated = _state.value.trackerCredentials.toMutableMap()
+        updated[creds.trackerId] = creds
+        prefs.edit().putString("tracker_creds_json", json.encodeToString(updated)).apply()
+        _state.update { it.copy(trackerCredentials = updated) }
+    }
+
+    fun clearTrackerSession(trackerId: String) {
+        val existing = _state.value.trackerCredentials[trackerId] ?: return
+        val cleared = existing.copy(
+            accessToken = "",
+            refreshToken = "",
+            username = "",
+            userId = ""
+        )
+        saveTrackerCredentials(cleared)
+    }
+
+    fun saveMalPkceVerifier(verifier: String) {
+        prefs.edit().putString("mal_pkce_verifier", verifier).apply()
+    }
+
+    fun consumeMalPkceVerifier(): String {
+        val v = prefs.getString("mal_pkce_verifier", "").orEmpty()
+        prefs.edit().remove("mal_pkce_verifier").apply()
+        return v
     }
 }

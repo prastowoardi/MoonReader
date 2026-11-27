@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -42,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -61,6 +63,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.moonreader.app.BuildConfig
 import com.moonreader.app.R
@@ -73,6 +76,7 @@ import com.moonreader.app.domain.model.DownloadStatus
 import com.moonreader.app.domain.model.DownloadTask
 import com.moonreader.app.domain.model.ReaderMode
 import com.moonreader.app.domain.model.SourceInfo
+import com.moonreader.app.domain.model.TrackerAccountInfo
 import com.moonreader.app.ui.state.AppUpdateUiState
 import kotlinx.coroutines.launch
 
@@ -86,6 +90,8 @@ fun MoreScreen(
     downloadTasks: List<DownloadTask>,
     isRestoringBackup: Boolean,
     appUpdateState: AppUpdateUiState = AppUpdateUiState(),
+    trackerAccounts: List<TrackerAccountInfo> = emptyList(),
+    isTrackerLoggingIn: Boolean = false,
     onSetThemeMode: (AppThemeMode) -> Unit,
     onSetDefaultReaderMode: (ReaderMode) -> Unit,
     onSetGridColumns: (Int) -> Unit,
@@ -102,6 +108,10 @@ fun MoreScreen(
     onCheckAppUpdate: (String) -> Unit = {},
     onInstallAppUpdate: () -> Unit = {},
     onDismissAppUpdate: () -> Unit = {},
+    onLoginKitsu: (String, String, () -> Unit) -> Unit = { _, _, _ -> },
+    onLaunchTrackerOAuth: (String, String) -> Unit = { _, _ -> },
+    onLoginTrackerWithToken: (String, String, String, () -> Unit) -> Unit = { _, _, _, _ -> },
+    onLogoutTracker: (String) -> Unit = {},
     onNotify: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -113,6 +123,11 @@ fun MoreScreen(
     var showDownloadsDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showUpdaterDialog by remember { mutableStateOf(false) }
+    var activeTrackerDialog by remember { mutableStateOf<TrackerAccountInfo?>(null) }
+    var kitsuEmailInput by remember { mutableStateOf("") }
+    var kitsuPasswordInput by remember { mutableStateOf("") }
+    var oauthClientIdInput by remember { mutableStateOf("") }
+    var manualTokenInput by remember { mutableStateOf("") }
     var updateUrlInput by remember(preferences.updateFeedUrl) {
         mutableStateOf(preferences.updateFeedUrl.ifBlank { PreferencesStore.DEFAULT_UPDATE_FEED_URL })
     }
@@ -438,6 +453,137 @@ fun MoreScreen(
         )
     }
 
+    activeTrackerDialog?.let { targetTracker ->
+        val currentAccount = trackerAccounts.firstOrNull { it.id == targetTracker.id } ?: targetTracker
+        val redirectHint = when (currentAccount.id) {
+            "anilist" -> "moonreader://anilist-auth"
+            "mal" -> "moonreader://mal-auth"
+            else -> ""
+        }
+        AlertDialog(
+            onDismissRequest = { if (!isTrackerLoggingIn) activeTrackerDialog = null },
+            title = { Text("Akun ${currentAccount.name}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (currentAccount.isLoggedIn) {
+                        Text(
+                            text = "Terhubung sebagai: ${currentAccount.username.ifBlank { "Pengguna" }}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    if (currentAccount.supportsPasswordLogin) {
+                        OutlinedTextField(
+                            value = kitsuEmailInput,
+                            onValueChange = { kitsuEmailInput = it },
+                            label = { Text("Email / Username Kitsu") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = kitsuPasswordInput,
+                            onValueChange = { kitsuPasswordInput = it },
+                            label = { Text("Password Kitsu") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text(
+                            text = "Redirect URI aplikasi:\n$redirectHint",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = oauthClientIdInput,
+                            onValueChange = { oauthClientIdInput = it },
+                            label = { Text("Client ID ${currentAccount.name}") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            enabled = !isTrackerLoggingIn && oauthClientIdInput.isNotBlank(),
+                            onClick = {
+                                onLaunchTrackerOAuth(currentAccount.id, oauthClientIdInput.trim())
+                                activeTrackerDialog = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Login via Browser (OAuth)")
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        Text(
+                            text = "Atau tempel Access Token langsung:",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        OutlinedTextField(
+                            value = manualTokenInput,
+                            onValueChange = { manualTokenInput = it },
+                            label = { Text("Access Token (opsional)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (isTrackerLoggingIn) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            },
+            confirmButton = {
+                if (currentAccount.supportsPasswordLogin) {
+                    Button(
+                        enabled = !isTrackerLoggingIn && kitsuEmailInput.isNotBlank() && kitsuPasswordInput.isNotBlank(),
+                        onClick = {
+                            onLoginKitsu(kitsuEmailInput.trim(), kitsuPasswordInput) {
+                                kitsuPasswordInput = ""
+                                activeTrackerDialog = null
+                            }
+                        }
+                    ) {
+                        Text("Masuk")
+                    }
+                } else {
+                    Button(
+                        enabled = !isTrackerLoggingIn && manualTokenInput.isNotBlank(),
+                        onClick = {
+                            onLoginTrackerWithToken(
+                                currentAccount.id,
+                                manualTokenInput.trim(),
+                                oauthClientIdInput.trim()
+                            ) {
+                                manualTokenInput = ""
+                                activeTrackerDialog = null
+                            }
+                        }
+                    ) {
+                        Text("Simpan Token")
+                    }
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (currentAccount.isLoggedIn) {
+                        OutlinedButton(
+                            enabled = !isTrackerLoggingIn,
+                            onClick = {
+                                onLogoutTracker(currentAccount.id)
+                                activeTrackerDialog = null
+                            }
+                        ) {
+                            Text("Logout")
+                        }
+                    }
+                    TextButton(
+                        enabled = !isTrackerLoggingIn,
+                        onClick = { activeTrackerDialog = null }
+                    ) {
+                        Text("Tutup")
+                    }
+                }
+            }
+        )
+    }
+
     if (showAboutDialog) {
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
@@ -539,6 +685,32 @@ fun MoreScreen(
                     onClick = { importLauncher.launch(arrayOf("*/*")) }
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            }
+
+            if (trackerAccounts.isNotEmpty()) {
+                item {
+                    SectionLabel("Tracker (MAL, AniList, Kitsu)")
+                    trackerAccounts.forEach { acc ->
+                        val statusText = if (acc.isLoggedIn) {
+                            "Terhubung: ${acc.username.ifBlank { "Aktif" }} (ketuk untuk kelola)"
+                        } else {
+                            "Belum terhubung • Ketuk untuk login / atur Client ID"
+                        }
+                        MoreItem(
+                            icon = Icons.Outlined.Sync,
+                            title = acc.name,
+                            subtitle = statusText,
+                            onClick = {
+                                oauthClientIdInput = acc.clientId
+                                manualTokenInput = ""
+                                kitsuEmailInput = if (acc.supportsPasswordLogin) acc.username else ""
+                                kitsuPasswordInput = ""
+                                activeTrackerDialog = acc
+                            }
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                }
             }
 
             item {

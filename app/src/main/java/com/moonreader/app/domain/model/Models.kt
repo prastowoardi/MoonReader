@@ -42,6 +42,51 @@ enum class DownloadStatus {
     FAILED
 }
 
+enum class TrackStatus(val label: String) {
+    READING("Membaca"),
+    COMPLETED("Tamat"),
+    ON_HOLD("Ditunda"),
+    DROPPED("Dihentikan"),
+    PLAN_TO_READ("Rencana Baca")
+}
+
+data class TrackerAccountInfo(
+    val id: String,
+    val name: String,
+    val isLoggedIn: Boolean,
+    val username: String = "",
+    val clientId: String = "",
+    val requiresClientIdForLogin: Boolean = false,
+    val supportsPasswordLogin: Boolean = false
+)
+
+data class TrackSearchResult(
+    val trackerId: String,
+    val remoteId: Long,
+    val title: String,
+    val coverUrl: String = "",
+    val totalChapters: Int = 0,
+    val publishingStatus: String = "",
+    val remoteUrl: String = ""
+)
+
+@Serializable
+data class TrackRecord(
+    val id: String,
+    val mangaId: String,
+    val trackerId: String,
+    val remoteId: Long,
+    val libraryEntryId: String = "",
+    val title: String,
+    val coverUrl: String = "",
+    val status: TrackStatus = TrackStatus.READING,
+    val lastChapterRead: Float = 0f,
+    val totalChapters: Int = 0,
+    val score: Float = 0f,
+    val remoteUrl: String = "",
+    val updatedAt: Long = 0L
+)
+
 @Serializable
 data class Manga(
     val id: String,
