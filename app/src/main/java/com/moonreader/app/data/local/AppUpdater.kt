@@ -81,10 +81,10 @@ object AppUpdaterParser {
     internal fun parseVersionCode(versionName: String): Int {
         val parts = versionName.split(".").mapNotNull { it.filter(Char::isDigit).toIntOrNull() }
         if (parts.isEmpty()) return 1
-        val major = parts.getOrElse(0) { 1 }
-        val minor = parts.getOrElse(1) { 0 }
-        val patch = parts.getOrElse(2) { 0 }
-        return major * 10000 + minor * 100 + patch
+        val major = parts.getOrElse(0) { 1 }.coerceAtMost(2000)
+        val minor = parts.getOrElse(1) { 0 }.coerceIn(0, 999)
+        val patch = parts.getOrElse(2) { 0 }.coerceIn(0, 999)
+        return major * 1_000_000 + minor * 1_000 + patch
     }
 }
 

@@ -15,6 +15,22 @@ val keystoreProps = Properties().apply {
     }
 }
 
+val rawTagVersion = (System.getenv("GITHUB_REF_NAME") ?: "")
+    .removePrefix("v")
+    .trim()
+    .takeIf { it.matches(Regex("^\\d+(\\.\\d+)*$")) }
+    ?: "1.1.1"
+
+val computedVersionCode = rawTagVersion
+    .split(".")
+    .mapNotNull { it.toIntOrNull() }
+    .let { parts ->
+        val major = parts.getOrElse(0) { 1 }.coerceAtMost(2000)
+        val minor = parts.getOrElse(1) { 0 }.coerceIn(0, 999)
+        val patch = parts.getOrElse(2) { 0 }.coerceIn(0, 999)
+        major * 1_000_000 + minor * 1_000 + patch
+    }
+
 android {
     namespace = "com.moonreader.app"
     compileSdk = 34
@@ -23,8 +39,8 @@ android {
         applicationId = "com.moonreader.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = computedVersionCode
+        versionName = rawTagVersion
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

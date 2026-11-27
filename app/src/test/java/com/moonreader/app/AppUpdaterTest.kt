@@ -38,7 +38,7 @@ class AppUpdaterTest {
             }
         """.trimIndent()
         val gh = AppUpdaterParser.parseGitHubRelease(ghJson)
-        assertEquals(10203, gh.versionCode)
+        assertEquals(1_002_003, gh.versionCode)
         assertEquals("1.2.3", gh.versionName)
         assertEquals(
             "https://github.com/prastowoardi/MoonReader/releases/download/v1.2.3/MoonReader-v1.2.3-release.apk",
@@ -49,7 +49,9 @@ class AppUpdaterTest {
     @Test
     fun `isNewerVersion compares semantic version tags accurately`() {
         org.junit.Assert.assertTrue(AppUpdaterParser.isNewerVersion("1.0.2", "1.0.0"))
-        org.junit.Assert.assertFalse(AppUpdaterParser.isNewerVersion("1.0.2", "1.0.2"))
+        org.junit.Assert.assertTrue(AppUpdaterParser.isNewerVersion("10.1.1", "9.99.99"))
+        org.junit.Assert.assertTrue(AppUpdaterParser.isNewerVersion("10.10.2", "10.2.9"))
+        org.junit.Assert.assertFalse(AppUpdaterParser.isNewerVersion("10.1.1", "10.1.1"))
         org.junit.Assert.assertFalse(AppUpdaterParser.isNewerVersion("1.0.1", "1.0.2"))
     }
 }
